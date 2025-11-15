@@ -1,0 +1,23 @@
+{
+  "name": "x402-demo",
+  "version": "1.0.0",
+  "description": "Complete x402 payment protocol demonstration",
+  "scripts": {
+    "install:all": "cd server && npm install && cd ../client && npm install",
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev",
+    "dev": "echo 'Run these in separate terminals:' && echo '  npm run dev:server' && echo '  npm run dev:client'"
+  },
+  "keywords": [
+    "x402",
+    "payments",
+    "crypto",
+    "api",
+    "coinbase",
+    "base",
+    "usdc"
+  ],
+  "author": "",
+  "license": "MIT"
+}
+
