@@ -12,7 +12,7 @@ import {
   useSignOut
 } from "@coinbase/cdp-hooks";
 import { toViemAccount } from "@coinbase/cdp-core";
-import { createWalletClient, http } from "viem";
+import { createWalletClient, http, publicActions } from "viem";
 import { baseSepolia } from "viem/chains";
 import { wrapFetchWithPayment, decodeXPaymentResponse } from "x402-fetch";
 
@@ -225,7 +225,7 @@ export default function Home() {
         account: viemAccount,
         chain: baseSepolia,
         transport: http(),
-      });
+      }).extend(publicActions);
       
       // wrap fetch with x402 payment handling
       const fetchWithPayment = wrapFetchWithPayment(fetch, walletClient);

@@ -55,6 +55,25 @@ app.get("/motivate", (req, res) => {
   });
 });
 
+// Root endpoint - API info
+app.get("/", (req, res) => {
+  res.json({
+    name: "x402 Demo API",
+    description: "Simple API demonstrating x402 payments with CDP",
+    endpoints: {
+      "GET /health": "Health check",
+      "GET /balance/:address": "Get USDC balance",
+      "POST /faucet": "Request test USDC",
+      "GET /motivate": "Get motivational quote (requires 0.01 USDC payment)"
+    },
+    payment: {
+      price: "0.01 USDC",
+      network: "base-sepolia"
+    },
+    github: "https://github.com/jnix2007/x402-demo"
+  });
+});
+
 // health check endpoint
 app.get("/health", (req, res) => {
   res.json({ status: "ok", message: "x402 demo server is running" });
