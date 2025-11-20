@@ -1,10 +1,14 @@
-# x402 demo - embed onchain payments in HTTP requests
+# x402 demo
+
+![x402 demo](./x402-demo.png)
 
 this is a simple demo of the x402 payment protocol, showcasing how easy it is to add crypto payments to any API and how seamlessly clients can pay for access
 
 ## what is x402?
 
-[x402](https://www.x402.org/) is an HTTP-based payment protocol that enables instant, automatic stablecoin payments for APIs and digital content. It revives the HTTP 402 "Payment Required" status code to enable programmatic payments without accounts, sessions, or complex authentication.
+[x402](https://www.x402.org/) is an HTTP-based payment protocol that enables instant, automatic stablecoin payments for APIs and digital content
+
+it revives the HTTP 402 "Payment Required" status code to enable programmatic payments without accounts, sessions, or complex auth
 
 x402 is perfect for:
 - AI agents paying for services
@@ -19,12 +23,12 @@ this project showcases **four Coinbase Developer Platform (CDP) products** worki
 ### CDP products used
 
 **client-side:**
-- **CDP Embedded Wallet** - Seamless user auth with a variety of web2-friendly auth methods; no extension or seed phrases
+- **CDP Embedded Wallet** - seamless user auth with a variety of web2-friendly auth methods; no extension or seed phrases
 
 **server-side:**
-- **CDP x402 Facilitator** - Payment verification and blockchain settlement
-- **CDP Faucet API** - One-click test USDC distribution
-- **CDP Token Balances API** - Real-time USDC balance checking
+- **CDP x402 Facilitator** - payment verification and blockchain settlement
+- **CDP Faucet API** - one-click test USDC distribution
+- **CDP Token Balances API** - realtime USDC balance checking
 
 ### what you'll see
 
@@ -41,7 +45,7 @@ this project showcases **four Coinbase Developer Platform (CDP) products** worki
 
 1. **Node.js v18+** installed
 2. **CDP Project** created at https://portal.cdp.coinbase.com/
-3. **CDP API Key** for the server
+3. **CDP API Key** for using CDP Facilitator, Faucet API, and Token Balances API
 4. **wallet address** to receive payments (any Ethereum address)
 
 ### 1. install server dependencies
@@ -74,7 +78,7 @@ PORT=3001
 ### 3. start server
 
 ```bash
-npm run dev
+npm run dev:server
 ```
 
 you should see:
@@ -113,10 +117,10 @@ NEXT_PUBLIC_API_URL=http://localhost:3001
 3. go to Settings
 4. copy the Project ID
 
-### 6. start client
+### 6. start client (in a new terminal)
 
 ```bash
-npm run dev
+npm run dev:client
 ```
 
 you should see:
@@ -130,44 +134,10 @@ you should see:
 1. open http://localhost:3000
 2. click "Connect Wallet" and choose your preferred sign-in method
 3. complete authentication; CDP Embedded Wallet is created automatically
-4. click "Request Faucet" to get free test USDC
+4. click "Faucet" to get free testnet USDC
 5. click "Get Motivational Quote (0.01 USDC)"
 6. watch the payment happen automatically
 7. see your quote and transaction confirmation on Basescan
-
-## troubleshooting
-
-### server won't start
-- check that port 3001 is available
-- verify CDP API credentials are correct in `server/.env`
-- make sure you ran `npm install`
-
-### client won't start
-- check that port 3000 is available
-- make sure you ran `npm install`
-- verify `NEXT_PUBLIC_API_URL` is set correctly
-
-### wallet won't connect
-- clear browser cache and reload
-- check browser console for errors
-
-### Faucet not working
-- wait a few seconds and try again
-- the faucet may have rate limits
-
-### payment fails
-- ensure you have at least 0.01 USDC
-- check that server is running
-- verify `RECEIVER_WALLET` is set correctly in `server/.env`
-
-### test the 402 response
-
-with server running:
-```bash
-curl http://localhost:3001/motivate
-```
-
-you should get a 402 response with payment requirements
 
 ## project structure
 
@@ -229,28 +199,24 @@ the **CDP x402 Facilitator** handles:
 
 ## x402 client-side integration
 
-making a paid request from your app's front-end is also simple:
+making a paid request from your app's front-end is incredibly simple with CDP's new `useX402` hook:
 
 ```typescript
-import { wrapFetchWithPayment } from "x402-fetch";
-import { useCurrentUser } from "@coinbase/cdp-hooks";
+import { useX402 } from "@coinbase/cdp-hooks";
 
-// get wallet client from CDP Embedded Wallet
-const { currentUser } = useCurrentUser();
-const walletClient = await currentUser.getWalletClient(chainId);
+// one line to get payment-enabled fetch
+const { fetchWithPayment } = useX402();
 
-// wrap fetch with x402 payment handling
-const fetchWithPayment = wrapFetchWithPayment(fetch, walletClient);
-
-// make paid request - payment happens automatically
+// make paid request; payment happens automatically
 const response = await fetchWithPayment("http://localhost:3001/motivate");
 const data = await response.json();
 ```
 
-x402-fetch + **CDP Embedded Wallet** automatically:
+the **`useX402` hook** from CDP Embedded Wallet automatically:
 - detects 402 responses from the server
-- creates EIP-3009 payment transactions
-- signs with your CDP Embedded Wallet (user's private key managed securely by CDP)
+- extracts payment information
+- creates payment transactions
+- signs with your CDP Embedded Wallet
 - retries with proof of payment
 - returns the paid content
 
@@ -302,7 +268,7 @@ x402-fetch + **CDP Embedded Wallet** automatically:
    - explain the endpoint just returns data normally
 
 2. **start server**
-   - run `npm run dev`
+   - run `npm run dev:server`
    - show it's just a normal Express server
 
 3. **show client UI** (http://localhost:3000)
@@ -355,7 +321,7 @@ this demo uses **four CDP products**:
 | **Faucet API** | distribute testnet USDC | server | CDP API Key |
 | **Token Balances API** | check USDC balances | server | CDP API Key |
 
-CDP products work together seamlessly - the server uses one CDP API key to access the Facilitator, Faucet, and Token Balances APIs, while the client uses a CDP Project ID for Embedded Wallet creation & auth.
+CDP products work together seamlessly - the server uses one CDP API key to access the Facilitator, Faucet, and Token Balances APIs, while the client uses a CDP Project ID for Embedded Wallet creation & auth
 
 ## learn more
 

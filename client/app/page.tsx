@@ -9,12 +9,9 @@ import {
   useSignInWithSms,
   useVerifySmsOTP,
   useSignInWithOAuth,
-  useSignOut
+  useSignOut,
+  useX402
 } from "@coinbase/cdp-hooks";
-import { toViemAccount } from "@coinbase/cdp-core";
-import { createWalletClient, http, publicActions } from "viem";
-import { baseSepolia } from "viem/chains";
-import { wrapFetchWithPayment, decodeXPaymentResponse } from "x402-fetch";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
@@ -40,6 +37,7 @@ export default function Home() {
   const { verifySmsOTP } = useVerifySmsOTP();
   const { signInWithOAuth } = useSignInWithOAuth();
   const { signOut } = useSignOut();
+  const { fetchWithPayment } = useX402();
   
   const [quote, setQuote] = useState<string>("");
   const [paymentInfo, setPaymentInfo] = useState<PaymentResponse | null>(null);
@@ -53,6 +51,8 @@ export default function Home() {
   const [flowId, setFlowId] = useState("");
   const [authType, setAuthType] = useState<"email" | "sms">("email");
   const [faucetSuccess, setFaucetSuccess] = useState<string>("");
+  const [showExplanation, setShowExplanation] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const address = currentUser?.evmAccounts?.[0];
 
@@ -214,41 +214,38 @@ export default function Home() {
     setPaymentInfo(null);
     
     try {
-      // convert CDP Embedded Wallet to viem account
-      const evmAddress = currentUser.evmAccounts?.[0];
-      if (!evmAddress) {
-        throw new Error("no EVM account found");
-      }
+      console.log("using CDP x402 hook to make paid request to", `${API_URL}/motivate`);
       
-      const viemAccount = await toViemAccount(evmAddress as `0x${string}`);
-      const walletClient = createWalletClient({
-        account: viemAccount,
-        chain: baseSepolia,
-        transport: http(),
-      }).extend(publicActions);
-      
-      // wrap fetch with x402 payment handling
-      // @ts-ignore - viem type compatibility between x402-fetch and latest viem
-      const fetchWithPayment = wrapFetchWithPayment(fetch, walletClient);
-      
-      // make the paid request
+      // make paid request using CDP's new useX402 hook
       const response = await fetchWithPayment(`${API_URL}/motivate`, {
         method: "GET",
       });
+      
+      console.log("response status:", response.status);
       
       if (!response.ok) {
         throw new Error(`API request failed: ${response.status}`);
       }
       
       const data: ApiResponse = await response.json();
+      console.log("received data:", data);
       setQuote(data.quote);
       
+      // parse payment response header - need this if we wanna show txn hash
       const paymentResponseHeader = response.headers.get("x-payment-response");
+      console.log("payment response header:", paymentResponseHeader);
+      
       if (paymentResponseHeader) {
-        const paymentResponse = decodeXPaymentResponse(paymentResponseHeader);
-        setPaymentInfo(paymentResponse);
+        try {
+          const paymentResponse = JSON.parse(atob(paymentResponseHeader));
+          console.log("payment info:", paymentResponse);
+          setPaymentInfo(paymentResponse);
+        } catch (e) {
+          console.error("failed to parse payment response:", e);
+        }
       }
       
+      console.log("payment flow complete");
       setTimeout(fetchBalance, 2000);
       
     } catch (err) {
@@ -261,16 +258,69 @@ export default function Home() {
 
   return (
     <div className="container">
-      <div className="header">
-        <h1>x402 demo</h1>
-        <p>monetize APIs with crypto - simple and instant</p>
+      {/* Top Nav */}
+      <div className="top-nav">
+        <div className="nav-left">
+          <h1>x402 demo</h1>
+          <p>pay for APIs with crypto</p>
+        </div>
+        <div className="nav-right">
+          {isSignedIn && address ? (
+            <>
+              <button 
+                className="nav-button"
+                onClick={handleFaucet} 
+                disabled={loading}
+              >
+                faucet
+              </button>
+              <div className="wallet-badge">
+                <span>
+                  {address.slice(0, 6)}...{address.slice(-4)}
+                </span>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(address);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: copied ? '#00ff00' : '#00ffff',
+                    cursor: 'pointer',
+                    padding: 0,
+                    fontSize: '16px',
+                    marginLeft: '8px'
+                  }}
+                >
+                  {copied ? '✓' : '📋'}
+                </button>
+              </div>
+              <div className="balance-badge">
+                {balance} USDC
+              </div>
+              <button 
+                className="nav-button"
+                onClick={() => signOut()}
+              >
+                sign out
+              </button>
+            </>
+          ) : (
+            <button className="nav-button" onClick={() => setShowAuthMethods(true)}>
+              sign in
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="wallet-section">
-        <h2 style={{ marginBottom: "16px", fontSize: "20px" }}>sign in</h2>
-        
+      {/* Main Content */}
+      <div className="main-content">
         {!isSignedIn ? (
-          <>
+          <div className="cta-section">
+            <h2>sign in to get started</h2>
+            <p>authenticate with email, SMS, Google, or X</p>
             {!showAuthMethods ? (
               <button 
                 className="button button-primary"
@@ -394,81 +444,26 @@ export default function Home() {
                 </button>
               </div>
             )}
-          </>
+          </div>
         ) : (
-          <div className="wallet-info">
-            <p>connected:</p>
-            <div className="address">{address}</div>
-            <p style={{ marginTop: "16px" }}>USDC balance:</p>
-            <div className="balance">{balance} USDC</div>
-            <button 
-              className="button button-secondary" 
-              onClick={() => signOut()}
-              style={{ marginTop: "16px" }}
-            >
-              sign out
-            </button>
-          </div>
-        )}
-      </div>
-
-      {isSignedIn && (
-        <>
-          <div className="action-section">
-            <h2 style={{ marginBottom: "16px", fontSize: "20px" }}>get testnet USDC</h2>
-            <button
-              className="button button-secondary"
-              onClick={handleFaucet}
-              disabled={loading}
-            >
-              {loading ? "requesting..." : "request Faucet (free testnet USDC)"}
-            </button>
-            <p style={{ fontSize: "14px", color: "#666", marginTop: "8px" }}>
-              get free USDC on Base Sepolia for testing (1 USDC per request)
-            </p>
-            {faucetSuccess && (
-              <div style={{ 
-                marginTop: "12px", 
-                padding: "12px", 
-                background: "#d4edda", 
-                border: "1px solid #c3e6cb",
-                borderRadius: "8px",
-                fontSize: "14px",
-                color: "#155724"
-              }}>
-                <strong>✅ Faucet successful!</strong>
-                <div style={{ marginTop: "8px", fontSize: "12px", fontFamily: "monospace" }}>
-                  <a 
-                    href={`https://sepolia.basescan.org/tx/${faucetSuccess}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ color: "#155724", textDecoration: "underline" }}
-                  >
-                    view transaction on Basescan →
-                  </a>
-                </div>
-                <p style={{ marginTop: "8px", fontSize: "13px" }}>
-                  USDC will arrive in a few seconds - your balance will update automatically
+          // Signed in - show main CTA
+          <>
+            <div className="cta-section">
+              <h2>call paid API</h2>
+              <p>get a motivational quote for 0.01 USDC</p>
+              <button
+                className="cta-button"
+                onClick={handleCallApi}
+                disabled={loading || parseFloat(balance) < 0.01}
+              >
+                {loading ? "processing..." : "get motivational quote"}
+              </button>
+              {parseFloat(balance) < 0.01 && (
+                <p style={{ fontSize: "14px", color: "#ff00ff", marginTop: "16px" }}>
+                  ⚠️ need at least 0.01 USDC - use faucet button above
                 </p>
-              </div>
-            )}
-          </div>
-
-          <div className="action-section">
-            <h2 style={{ marginBottom: "16px", fontSize: "20px" }}>call x402-enabled API</h2>
-            <button
-              className="button button-primary"
-              onClick={handleCallApi}
-              disabled={loading || parseFloat(balance) < 0.01}
-            >
-              {loading ? "processing..." : "Get Motivational Quote (0.01 USDC)"}
-            </button>
-            {parseFloat(balance) < 0.01 && (
-              <div className="info-box">
-                you need at least 0.01 USDC to call the API - use the faucet above!
-              </div>
-            )}
-          </div>
+              )}
+            </div>
 
           {error && (
             <div className="error">
@@ -476,38 +471,42 @@ export default function Home() {
             </div>
           )}
 
-          {quote && (
-            <div className="response-section">
-              <h3>API response:</h3>
-              <div className="quote-display">"{quote}"</div>
-              
-              {paymentInfo && (
-                <div className="payment-info">
-                  <p><strong>payment status:</strong> {paymentInfo.success ? "✅ Successful" : "❌ Failed"}</p>
-                  {paymentInfo.transaction && (
-                    <>
-                      <p><strong>transaction:</strong></p>
-                      <div className="tx-hash">
-                        <a 
-                          href={`https://sepolia.basescan.org/tx/${paymentInfo.transaction}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          {paymentInfo.transaction}
-                        </a>
-                      </div>
-                    </>
-                  )}
-                  <p><strong>network:</strong> {paymentInfo.network}</p>
-                </div>
-              )}
-            </div>
-          )}
-        </>
-      )}
+            {quote && (
+              <div className="response-section">
+                <h3>response:</h3>
+                <div className="quote-display">"{quote}"</div>
+                
+                {paymentInfo && paymentInfo.transaction && (
+                  <div style={{ marginTop: "16px", textAlign: "center" }}>
+                    <a 
+                      href={`https://sepolia.basescan.org/tx/${paymentInfo.transaction}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="button button-secondary"
+                      style={{ display: "inline-block", textDecoration: "none" }}
+                    >
+                      view transaction on basescan →
+                    </a>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </div>
 
-      <div className="steps">
-        <h3>how x402 works:</h3>
+      {/* Expandable Explanation */}
+      <div className="expandable-section">
+        <button 
+          className="expand-button"
+          onClick={() => setShowExplanation(!showExplanation)}
+        >
+          {showExplanation ? '▼ hide details' : '▶ how x402 works'}
+        </button>
+        
+        {showExplanation && (
+          <div className="expanded-content">
+            <h3>how x402 works:</h3>
         <ol>
           <li>
             <strong>user clicks "Get Motivational Quote"</strong>
@@ -626,7 +625,7 @@ Response:
                 <p>Facilitator calls USDC contract's <code>transferWithAuthorization</code>:</p>
                 <ul style={{ marginLeft: "20px", marginTop: "8px" }}>
                   <li>submits your signed authorization to the blockchain</li>
-                  <li>Facilitator pays the gas fees (not you!)</li>
+                  <li>Facilitator pays the gas fees</li>
                   <li>USDC transfers from your wallet to receiver</li>
                   <li>transaction confirms on Base</li>
                   <li>returns transaction hash to server</li>
@@ -636,7 +635,7 @@ Response:
           </li>
           
           <li>
-            <strong>server returns the protected content</strong>
+            <strong>server returns the x402-gated content</strong>
             <details style={{ marginTop: "8px" }}>
               <summary style={{ cursor: "pointer", color: "#0052ff" }}>view response →</summary>
               <pre style={{ fontSize: "11px", background: "white", padding: "8px", borderRadius: "4px", marginTop: "8px", overflow: "auto" }}>
@@ -664,10 +663,12 @@ Decoded X-PAYMENT-RESPONSE:
           <li>
             <strong>user sees the quote and payment confirmation</strong>
             <p style={{ fontSize: "13px", marginTop: "8px" }}>
-              click the transaction hash to view it on Basescan and see the actual onchain payment
+              click the transaction hash to view it on Basescan and see the onchain payment
             </p>
           </li>
         </ol>
+          </div>
+        )}
       </div>
     </div>
   );
