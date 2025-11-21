@@ -49,7 +49,7 @@ app.use(paymentMiddleware(
 // the x402-enabled endpoint - this is ALL the code you need!
 app.get("/motivate", (req, res) => {
   res.json({
-    quote: "Work hard - have fun - make history.",
+    quote: "Innovation happens when ideas collide, and blockchain is the perfect collision of technology and finance. --Vitalik Buterin",
     timestamp: new Date().toISOString(),
     paid: true
   });
